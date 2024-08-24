@@ -47,7 +47,9 @@ class Model:
             width=width, 
             height=height, 
             num_inference_steps=4,
-            generator=torch.Generator("cpu").manual_seed(42)
+            generator=torch.Generator("cpu").manual_seed(
+                torch.randint(0, 1000000, (1,)).item()
+            )
         ).images[0]
 
         print("Image generated!")
