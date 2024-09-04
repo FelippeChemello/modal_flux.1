@@ -21,11 +21,12 @@ image = modal.Image.debian_slim(python_version="3.10").apt_install(
 app = modal.App('flux1')
 
 with image.imports():
+    import os
     import torch
     from diffusers import FluxPipeline
-    from fastapi import Response
+    from fastapi import Response, Header
         
-@app.cls(gpu=modal.gpu.A100(), container_idle_timeout=15, image=image, timeout=120)
+@app.cls(gpu=modal.gpu.A100(), container_idle_timeout=15, image=image, timeout=120, secrets=[modal.Secret.from_name("flux.1-secret")])
 class Model:
     @modal.build()
     def build(self):
@@ -46,7 +47,7 @@ class Model:
             output_type='pil', 
             width=width, 
             height=height, 
-            num_inference_steps=4,
+            num_inference_steps=8,
             generator=torch.Generator("cpu").manual_seed(
                 torch.randint(0, 1000000, (1,)).item()
             )
@@ -64,7 +65,11 @@ class Model:
         return self.inference(prompt, width, height)
     
     @modal.web_endpoint(docs=True)
-    def web_inference(self, prompt: str, width: int = 1440, height: int = 1440):
+    def web_inference(self, prompt: str, width: int = 1440, height: int = 1440, x_api_key: str = Header(None)):
+        api_key = os.getenv("API_KEY")
+        if x_api_key != api_key:
+            return Response(content="Unauthorized", status_code=401)
+
         image = self.inference(prompt, width, height)
         return Response(content=image, media_type="image/png")
     
