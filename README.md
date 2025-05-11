@@ -22,7 +22,8 @@ To use the service, you need to have a modal.com and run the following command t
 modal setup
 ```
 
-on modal.com create a secret called `flux.1-secret` and set the value of `API_KEY` to a random string that will be used to authenticate the requests.
+on modal.com create a secret called `flux.1-secret` and set the value of `API_KEY` to a random string that will be used to authenticate the requests, also you need to create a secret called `HF_TOKEN` and set the value of your Hugging Face token.
+You can create a Hugging Face token by going to your [Hugging Face account settings](https://huggingface.co/settings/tokens) and generating a new token with the `read` scope.
 
 ### Development
 

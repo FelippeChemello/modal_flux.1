@@ -1,6 +1,13 @@
 import io
 import modal
 
+def download_weights():
+    import os
+    from huggingface_hub import snapshot_download
+
+    hf_token = os.getenv("HF_TOKEN")
+    snapshot_download("black-forest-labs/FLUX.1-schnell", token=hf_token)
+
 image = modal.Image.debian_slim(python_version="3.10").apt_install(
         "libglib2.0-0", 
         "libsm6", 
@@ -16,6 +23,11 @@ image = modal.Image.debian_slim(python_version="3.10").apt_install(
         "accelerate",
         "safetensors",
         "sentencepiece",
+    ).env({
+        "HF_HUB_CACHE": "/cache",
+    }).run_function(
+        download_weights,
+        secrets=[modal.Secret.from_name("flux.1-secret")],
     )
 
 app = modal.App('flux1')
@@ -26,18 +38,21 @@ with image.imports():
     from diffusers import FluxPipeline
     from fastapi import Response, Header
         
-@app.cls(gpu=modal.gpu.A100(), container_idle_timeout=15, image=image, timeout=120, secrets=[modal.Secret.from_name("flux.1-secret")])
+@app.cls(
+    gpu='A100-40GB', 
+    scaledown_window=15, 
+    image=image, 
+    timeout=120, 
+    secrets=[modal.Secret.from_name("flux.1-secret")],
+)
 class Model:
-    @modal.build()
-    def build(self):
-        from huggingface_hub import snapshot_download
-
-        snapshot_download("black-forest-labs/FLUX.1-schnell")
-
     @modal.enter()
     def enter(self):
         print("Loading model...")
-        self.pipeline = FluxPipeline.from_pretrained("black-forest-labs/FLUX.1-schnell", torch_dtype=torch.bfloat16).to('cuda')
+        self.pipeline = FluxPipeline.from_pretrained(
+            "black-forest-labs/FLUX.1-schnell", 
+            torch_dtype=torch.bfloat16,
+        ).to('cuda')
         print("Model loaded!")
 
     def inference(self, prompt: str, width: int = 1440, height: int = 1440):
@@ -64,7 +79,7 @@ class Model:
     def _inference(self, prompt: str, width: int = 1440, height: int = 1440):
         return self.inference(prompt, width, height)
     
-    @modal.web_endpoint(docs=True)
+    @modal.fastapi_endpoint(docs=True)
     def web_inference(self, prompt: str, width: int = 1440, height: int = 1440, x_api_key: str = Header(None)):
         api_key = os.getenv("API_KEY")
         if x_api_key != api_key:
